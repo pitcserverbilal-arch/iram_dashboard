@@ -16,17 +16,45 @@ NEPRA_LOSS_LIMIT = 4.1
 st.markdown("""
 <style>
 .kpi-card {
+    height: 190px;                     /* 🔒 FIXED HEIGHT */
+    width: 100%;
     background: linear-gradient(135deg, #0b3d91, #1f78b4);
-    padding: 20px;
+    padding: 18px;
     border-radius: 16px;
     color: white;
     box-shadow: 0px 6px 18px rgba(0,0,0,0.25);
-}
-.kpi-icon { font-size: 34px; }
-.kpi-title { font-size: 15px; opacity: 0.85; }
-.kpi-value { font-size: 30px; font-weight: 700; }
-.kpi-sub { font-size: 13px; opacity: 0.75; }
 
+    display: flex;                     /* 🔒 FLEX LAYOUT */
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+}
+
+.kpi-icon {
+    font-size: 28px;
+}
+
+.kpi-title {
+    font-size: 14px;
+    opacity: 0.85;
+    white-space: nowrap;               /* 🔒 NO WRAP */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.kpi-sub {
+    font-size: 12px;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+
+/* COLOR VARIANTS */
 .red-card { background: linear-gradient(135deg, #8b0000, #c0392b); }
 .green-card { background: linear-gradient(135deg, #0f5132, #198754); }
 .orange-card { background: linear-gradient(135deg, #9a3412, #f97316); }
