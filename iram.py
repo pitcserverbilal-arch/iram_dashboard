@@ -1107,14 +1107,19 @@ with tab4:
                          (df["SDIV_NAME"] == insight_disco)].sort_values("BILLING_MONTH")
     
     if not time_series_data.empty:
-        # Create subplot figure
+        # Create subplot figure with 3 subplots for better visualization
         fig = make_subplots(
-            rows=2, cols=1,
-            subplot_titles=[f"{insight_disco} - Performance Trends", "Monthly Metrics Overview"],
-            vertical_spacing=0.2,
-            row_heights=[0.6, 0.4]
+            rows=3, cols=1,
+            subplot_titles=[
+                f"{insight_disco} - Loss & Collection Trends", 
+                "Units Billed Trend",
+                "Net Metering Trend"
+            ],
+            vertical_spacing=0.15,
+            row_heights=[0.4, 0.3, 0.3]
         )
         
+        # Subplot 1: T&D Loss and Collection %
         # Add T&D Loss trend
         fig.add_trace(
             go.Scatter(
@@ -1123,7 +1128,8 @@ with tab4:
                 mode='lines+markers',
                 name='T&D Loss %',
                 line=dict(color=COLORS["danger"], width=3),
-                marker=dict(size=8)
+                marker=dict(size=8),
+                hovertemplate="<b>T&D Loss</b><br>Month: %{x}<br>Value: %{y:.1f}%<extra></extra>"
             ),
             row=1, col=1
         )
@@ -1136,38 +1142,90 @@ with tab4:
                 mode='lines+markers',
                 name='Collection %',
                 line=dict(color=COLORS["success"], width=3),
-                marker=dict(size=8)
+                marker=dict(size=8),
+                hovertemplate="<b>Collection %</b><br>Month: %{x}<br>Value: %{y:.1f}%<extra></extra>",
+                yaxis="y2"
             ),
             row=1, col=1
         )
         
-        # Add Net Metering as bar chart in second subplot
-        fig.add_trace(
-            go.Bar(
-                x=time_series_data["MONTH"],
-                y=time_series_data["MON_UNITS_NET_MET"] / 1_000_000,
-                name='Net Metering (M Units)',
-                marker_color=COLORS["info"],
-                hovertemplate="<b>Net Metering</b><br>Month: %{x}<br>Value: %{y:.2f}M<extra></extra>"
-            ),
-            row=2, col=1
+        # Add NEPRA limit line for T&D Loss
+        fig.add_hline(
+            y=NEPRA_LOSS_LIMIT,
+            line_dash="dash",
+            line_color=COLORS["danger"],
+            annotation_text=f"NEPRA Limit: {NEPRA_LOSS_LIMIT}%",
+            annotation_position="top right",
+            row=1, col=1
         )
         
-        # Add Units Billed as line in second subplot
-        fig.add_trace(
-            go.Scatter(
-                x=time_series_data["MONTH"],
-                y=time_series_data["MON_UNITS_BILLED"] / 1_000_000,
-                mode='lines',
-                name='Units Billed (M Units)',
-                line=dict(color=COLORS["primary"], width=2),
-                hovertemplate="<b>Units Billed</b><br>Month: %{x}<br>Value: %{y:.2f}M<extra></extra>"
-            ),
-            row=2, col=1
+        # Add 90% target line for Collection
+        fig.add_hline(
+            y=90,
+            line_dash="dash",
+            line_color=COLORS["success"],
+            annotation_text="Target: 90%",
+            annotation_position="bottom right",
+            row=1, col=1
         )
         
+        # Subplot 2: Units Billed Trend
+        if "MON_UNITS_BILLED" in time_series_data.columns:
+            # Check if units billed data exists and is not all zeros/NaN
+            if time_series_data["MON_UNITS_BILLED"].notna().any() and time_series_data["MON_UNITS_BILLED"].sum() > 0:
+                # Find appropriate scaling factor
+                max_units = time_series_data["MON_UNITS_BILLED"].max()
+                if max_units >= 1_000_000:
+                    scale_factor = 1_000_000
+                    scale_label = "M Units"
+                elif max_units >= 1_000:
+                    scale_factor = 1_000
+                    scale_label = "K Units"
+                else:
+                    scale_factor = 1
+                    scale_label = "Units"
+                
+                fig.add_trace(
+                    go.Bar(
+                        x=time_series_data["MONTH"],
+                        y=time_series_data["MON_UNITS_BILLED"] / scale_factor,
+                        name=f'Units Billed ({scale_label})',
+                        marker_color=COLORS["primary"],
+                        hovertemplate="<b>Units Billed</b><br>Month: %{x}<br>Value: %{y:,.0f} " + scale_label + "<extra></extra>"
+                    ),
+                    row=2, col=1
+                )
+        
+        # Subplot 3: Net Metering Trend
+        if "MON_UNITS_NET_MET" in time_series_data.columns:
+            # Check if net metering data exists and is not all zeros/NaN
+            if time_series_data["MON_UNITS_NET_MET"].notna().any() and time_series_data["MON_UNITS_NET_MET"].sum() > 0:
+                # Find appropriate scaling factor
+                max_net_meter = time_series_data["MON_UNITS_NET_MET"].max()
+                if max_net_meter >= 1_000_000:
+                    scale_factor_nm = 1_000_000
+                    scale_label_nm = "M Units"
+                elif max_net_meter >= 1_000:
+                    scale_factor_nm = 1_000
+                    scale_label_nm = "K Units"
+                else:
+                    scale_factor_nm = 1
+                    scale_label_nm = "Units"
+                
+                fig.add_trace(
+                    go.Bar(
+                        x=time_series_data["MONTH"],
+                        y=time_series_data["MON_UNITS_NET_MET"] / scale_factor_nm,
+                        name=f'Net Metering ({scale_label_nm})',
+                        marker_color=COLORS["info"],
+                        hovertemplate="<b>Net Metering</b><br>Month: %{x}<br>Value: %{y:,.0f} " + scale_label_nm + "<extra></extra>"
+                    ),
+                    row=3, col=1
+                )
+        
+        # Update layout
         fig.update_layout(
-            height=700,
+            height=900,
             plot_bgcolor='white',
             paper_bgcolor='white',
             font=dict(color=COLORS["dark"], size=12),
@@ -1178,15 +1236,165 @@ with tab4:
                 xanchor="center",
                 x=0.5
             ),
-            margin=dict(t=80, b=50, l=60, r=30)
+            margin=dict(t=80, b=50, l=60, r=30),
+            showlegend=True
         )
         
-        fig.update_yaxes(title_text="Percentage (%)", row=1, col=1)
-        fig.update_yaxes(title_text="Million Units", row=2, col=1)
+        # Update axes for subplot 1 (dual y-axes)
+        fig.update_yaxes(
+            title_text="T&D Loss %",
+            titlefont=dict(color=COLORS["danger"]),
+            tickfont=dict(color=COLORS["danger"]),
+            row=1, col=1
+        )
+        
+        # Add secondary y-axis for Collection %
+        fig.update_layout(
+            yaxis2=dict(
+                title="Collection %",
+                titlefont=dict(color=COLORS["success"]),
+                tickfont=dict(color=COLORS["success"]),
+                anchor="x",
+                overlaying="y",
+                side="right"
+            )
+        )
+        
+        # Update axes for subplot 2 (Units Billed)
+        if "MON_UNITS_BILLED" in time_series_data.columns and time_series_data["MON_UNITS_BILLED"].notna().any():
+            max_units = time_series_data["MON_UNITS_BILLED"].max()
+            if max_units >= 1_000_000:
+                yaxis_title = "Million Units"
+            elif max_units >= 1_000:
+                yaxis_title = "Thousand Units"
+            else:
+                yaxis_title = "Units"
+            
+            fig.update_yaxes(
+                title_text=yaxis_title,
+                row=2, col=1
+            )
+        
+        # Update axes for subplot 3 (Net Metering)
+        if "MON_UNITS_NET_MET" in time_series_data.columns and time_series_data["MON_UNITS_NET_MET"].notna().any():
+            max_net_meter = time_series_data["MON_UNITS_NET_MET"].max()
+            if max_net_meter >= 1_000_000:
+                yaxis_title_nm = "Million Units"
+            elif max_net_meter >= 1_000:
+                yaxis_title_nm = "Thousand Units"
+            else:
+                yaxis_title_nm = "Units"
+            
+            fig.update_yaxes(
+                title_text=yaxis_title_nm,
+                row=3, col=1
+            )
+        
+        # Update x-axes for all subplots
+        fig.update_xaxes(title_text="Month", row=3, col=1)
         
         st.plotly_chart(fig, use_container_width=True)
         
+        # Performance Summary - Alternative View with Line Chart
+        st.markdown('<div class="executive-card">', unsafe_allow_html=True)
+        st.markdown("### 📊 Alternative View: All Metrics in One Chart")
+        
+        # Create a multi-line chart for all key metrics
+        fig2 = go.Figure()
+        
+        # Add T&D Loss (scaled for visibility)
+        fig2.add_trace(go.Scatter(
+            x=time_series_data["MONTH"],
+            y=time_series_data["MON_PERC_LOSS_TD"],
+            mode='lines+markers',
+            name='T&D Loss %',
+            line=dict(color=COLORS["danger"], width=3),
+            marker=dict(size=8),
+            yaxis='y1'
+        ))
+        
+        # Add Collection %
+        fig2.add_trace(go.Scatter(
+            x=time_series_data["MONTH"],
+            y=time_series_data["COLL_PERC"],
+            mode='lines+markers',
+            name='Collection %',
+            line=dict(color=COLORS["success"], width=3),
+            marker=dict(size=8),
+            yaxis='y1'
+        ))
+        
+        # Add Units Billed (scaled appropriately)
+        if "MON_UNITS_BILLED" in time_series_data.columns:
+            # Normalize units billed for better visualization
+            if time_series_data["MON_UNITS_BILLED"].max() > 0:
+                units_billed_norm = (time_series_data["MON_UNITS_BILLED"] / time_series_data["MON_UNITS_BILLED"].max()) * 100
+                fig2.add_trace(go.Scatter(
+                    x=time_series_data["MONTH"],
+                    y=units_billed_norm,
+                    mode='lines+markers',
+                    name='Units Billed (Normalized %)',
+                    line=dict(color=COLORS["primary"], width=2, dash='dot'),
+                    marker=dict(size=6),
+                    yaxis='y2',
+                    hovertemplate="<b>Units Billed (Normalized)</b><br>Month: %{x}<br>Value: %{y:.1f}%<br>Actual: " + 
+                                 time_series_data["MON_UNITS_BILLED"].apply(lambda x: f"{x:,.0f}") + "<extra></extra>"
+                ))
+        
+        # Add Net Metering (scaled appropriately)
+        if "MON_UNITS_NET_MET" in time_series_data.columns:
+            # Normalize net metering for better visualization
+            if time_series_data["MON_UNITS_NET_MET"].max() > 0:
+                net_meter_norm = (time_series_data["MON_UNITS_NET_MET"] / time_series_data["MON_UNITS_NET_MET"].max()) * 100
+                fig2.add_trace(go.Scatter(
+                    x=time_series_data["MONTH"],
+                    y=net_meter_norm,
+                    mode='lines+markers',
+                    name='Net Metering (Normalized %)',
+                    line=dict(color=COLORS["info"], width=2, dash='dot'),
+                    marker=dict(size=6),
+                    yaxis='y2',
+                    hovertemplate="<b>Net Metering (Normalized)</b><br>Month: %{x}<br>Value: %{y:.1f}%<br>Actual: " + 
+                                 time_series_data["MON_UNITS_NET_MET"].apply(lambda x: f"{x:,.0f}") + "<extra></extra>"
+                ))
+        
+        # Update layout for dual y-axes
+        fig2.update_layout(
+            title=f"{insight_disco} - All Metrics (Normalized View)",
+            height=500,
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            font=dict(color=COLORS["dark"], size=12),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5
+            ),
+            margin=dict(t=80, b=80, l=60, r=60),
+            xaxis=dict(title="Month"),
+            yaxis=dict(
+                title="Percentage (%)",
+                titlefont=dict(color=COLORS["dark"]),
+                tickfont=dict(color=COLORS["dark"])
+            ),
+            yaxis2=dict(
+                title="Normalized Value (%)",
+                titlefont=dict(color=COLORS["primary"]),
+                tickfont=dict(color=COLORS["primary"]),
+                anchor="x",
+                overlaying="y",
+                side="right"
+            ),
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig2, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         # Performance Summary
+        st.markdown('<div class="executive-card">', unsafe_allow_html=True)
         st.markdown("### 📋 Performance Summary")
         
         if len(time_series_data) >= 2:
@@ -1201,13 +1409,13 @@ with tab4:
             
             latest = time_series_data.iloc[-1]
             
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             
             with col1:
                 if "MON_PERC_LOSS_TD" in numeric_cols:
                     td_trend = "Improving" if latest["MON_PERC_LOSS_TD"] < avg_3m["MON_PERC_LOSS_TD"] else "Declining"
                     st.metric(
-                        "T&D Loss Trend",
+                        "T&D Loss",
                         f"{latest['MON_PERC_LOSS_TD']:.1f}%",
                         delta=td_trend,
                         delta_color="inverse"
@@ -1217,7 +1425,7 @@ with tab4:
                 if "COLL_PERC" in numeric_cols:
                     coll_trend = "Improving" if latest["COLL_PERC"] > avg_3m["COLL_PERC"] else "Declining"
                     st.metric(
-                        "Collection Trend",
+                        "Collection",
                         f"{latest['COLL_PERC']:.1f}%",
                         delta=coll_trend
                     )
@@ -1226,16 +1434,25 @@ with tab4:
                 if "MONTHLY_ENERGY" in numeric_cols:
                     energy_growth = ((latest["MONTHLY_ENERGY"] - avg_3m["MONTHLY_ENERGY"]) / avg_3m["MONTHLY_ENERGY"]) * 100
                     st.metric(
-                        "Energy Growth",
+                        "Energy",
                         format_number(latest["MONTHLY_ENERGY"]),
                         delta=f"{energy_growth:+.1f}%"
                     )
             
             with col4:
+                if "MON_UNITS_BILLED" in numeric_cols:
+                    billed_growth = ((latest["MON_UNITS_BILLED"] - avg_3m["MON_UNITS_BILLED"]) / avg_3m["MON_UNITS_BILLED"]) * 100
+                    st.metric(
+                        "Units Billed",
+                        format_number(latest["MON_UNITS_BILLED"]),
+                        delta=f"{billed_growth:+.1f}%"
+                    )
+            
+            with col5:
                 if "MON_UNITS_NET_MET" in numeric_cols:
                     nm_growth = ((latest["MON_UNITS_NET_MET"] - avg_3m["MON_UNITS_NET_MET"]) / avg_3m["MON_UNITS_NET_MET"]) * 100
                     st.metric(
-                        "Net Metering Growth",
+                        "Net Metering",
                         format_number(latest["MON_UNITS_NET_MET"]),
                         delta=f"{nm_growth:+.1f}%"
                     )
